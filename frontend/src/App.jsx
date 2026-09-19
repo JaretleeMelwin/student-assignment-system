@@ -1,341 +1,277 @@
 import { useEffect, useState } from "react";
+import "./index.css";
 
-const API_URL =
-    import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+function formatDueDate(value) {
+  if (!value) return "No due date";
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  return date.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 function App() {
-    const [assignments, setAssignments] = useState([]);
-    const [loading, setLoading] = useState(true);
+  const [assignments, setAssignments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [studentName, setStudentName] = useState("");
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-    const [selectedAssignment, setSelectedAssignment] = useState(null);
-    const [selectedFile, setSelectedFile] = useState(null);
-    const [studentName, setStudentName] = useState("");
+  useEffect(() => {
+    fetch(`${API_URL}/api/assignments`)
+      .then((response) => {
+        if (!response.ok) throw new Error("Failed to fetch assignments");
+        return response.json();
+      })
+      .then((data) => {
+        setAssignments(data);
+        setLoading(false);
+      })
+      .catch((error) => {
+        console.error(error);
+        setMessage("Could not connect to the backend.");
+        setLoading(false);
+      });
+  }, []);
 
-    const [message, setMessage] = useState("");
+  function openSubmission(assignment) {
+    setSelectedAssignment(assignment);
+    setSelectedFile(null);
+    setStudentName("");
+    setMessage("");
+  }
 
-    // ================================
-    // Get assignments
-    // ================================
+  function closeSubmission() {
+    setSelectedAssignment(null);
+    setSelectedFile(null);
+    setStudentName("");
+    setMessage("");
+  }
 
-    useEffect(() => {
-        fetch(`${API_URL}/api/assignments`)
-            .then((response) => {
-                if (!response.ok) {
-                    throw new Error("Failed to fetch assignments");
-                }
+  async function submitAssignment(event) {
+    event.preventDefault();
 
-                return response.json();
-            })
-            .then((data) => {
-                setAssignments(data);
-                setLoading(false);
-            })
-            .catch((error) => {
-                console.error(error);
-                setMessage("Could not connect to the backend.");
-                setLoading(false);
-            });
-    }, []);
-
-    // ================================
-    // Open submission form
-    // ================================
-
-    function openSubmission(assignment) {
-        setSelectedAssignment(assignment);
-        setSelectedFile(null);
-        setStudentName("");
-        setMessage("");
+    if (!studentName.trim()) {
+      setMessage("Please enter your name.");
+      return;
     }
 
-    // ================================
-    // Submit assignment
-    // ================================
-
-    async function submitAssignment(event) {
-        event.preventDefault();
-
-        if (!selectedFile) {
-            setMessage("Please select a file.");
-            return;
-        }
-
-        if (!studentName.trim()) {
-            setMessage("Please enter your name.");
-            return;
-        }
-
-        const formData = new FormData();
-
-        formData.append("file", selectedFile);
-        formData.append("studentName", studentName.trim());
-
-        try {
-            setMessage("Uploading...");
-
-            const response = await fetch(
-                `${API_URL}/api/assignments/${selectedAssignment.id}/submit`,
-                {
-                    method: "POST",
-                    body: formData,
-                }
-            );
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(
-                    data.message || "Failed to submit assignment."
-                );
-            }
-
-            setMessage(data.message || "Assignment submitted successfully.");
-
-            setSelectedFile(null);
-
-            // Reset file input
-            event.target.reset();
-
-        } catch (error) {
-            console.error(error);
-
-            setMessage(
-                error.message || "Failed to submit assignment."
-            );
-        }
+    if (!selectedFile) {
+      setMessage("Please choose your assignment file.");
+      return;
     }
 
-    // ================================
-    // UI
-    // ================================
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    formData.append("studentName", studentName.trim());
 
-    return (
-        <div
-            style={{
-                minHeight: "100vh",
-                padding: "40px",
-                fontFamily: "Arial, sans-serif",
-                backgroundColor: "#f5f7fa",
-                boxSizing: "border-box",
-            }}
-        >
-            <div
-                style={{
-                    maxWidth: "900px",
-                    margin: "0 auto",
-                }}
-            >
-                <h1
-                    style={{
-                        textAlign: "center",
-                        marginBottom: "40px",
-                    }}
-                >
-                    Student Assignment Submission System
-                </h1>
+    try {
+      setSubmitting(true);
+      setMessage("Uploading your assignment...");
 
-                {/* Loading */}
+      const response = await fetch(
+        `${API_URL}/api/assignments/${selectedAssignment.id}/submit`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
-                {loading && (
-                    <p style={{ textAlign: "center" }}>
-                        Loading assignments...
-                    </p>
-                )}
+      const data = await response.json();
 
-                {/* Assignments */}
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to submit assignment.");
+      }
 
-                {!loading && assignments.length === 0 && (
-                    <p style={{ textAlign: "center" }}>
-                        No assignments available.
-                    </p>
-                )}
+      setMessage(data.message || "Assignment submitted successfully.");
+      setSelectedFile(null);
+      event.target.reset();
+    } catch (error) {
+      console.error(error);
+      setMessage(error.message || "Failed to submit assignment.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
-                {!loading &&
-                    assignments.map((assignment) => (
-                        <div
-                            key={assignment.id}
-                            style={{
-                                marginBottom: "25px",
-                                padding: "25px",
-                                backgroundColor: "white",
-                                border: "1px solid #ddd",
-                                borderRadius: "12px",
-                                boxShadow:
-                                    "0 2px 8px rgba(0,0,0,0.08)",
-                            }}
-                        >
-                            <h2 style={{ marginTop: 0 }}>
-                                {assignment.title}
-                            </h2>
-
-                            <p>
-                                {assignment.description}
-                            </p>
-
-                            <p>
-                                <strong>Due:</strong>{" "}
-                                {new Date(
-                                    assignment.due_date
-                                ).toLocaleString()}
-                            </p>
-
-                            <button
-                                onClick={() =>
-                                    openSubmission(assignment)
-                                }
-                                style={{
-                                    padding: "10px 18px",
-                                    border: "none",
-                                    borderRadius: "6px",
-                                    cursor: "pointer",
-                                    backgroundColor: "#2563eb",
-                                    color: "white",
-                                    fontSize: "15px",
-                                }}
-                            >
-                                Submit Assignment
-                            </button>
-                        </div>
-                    ))}
-
-                {/* Submission Form */}
-
-                {selectedAssignment && (
-                    <div
-                        style={{
-                            marginTop: "30px",
-                            padding: "30px",
-                            backgroundColor: "white",
-                            border: "2px solid #333",
-                            borderRadius: "12px",
-                        }}
-                    >
-                        <h2>
-                            Submit:{" "}
-                            {selectedAssignment.title}
-                        </h2>
-
-                        <form onSubmit={submitAssignment}>
-                            {/* Student Name */}
-
-                            <div
-                                style={{
-                                    marginBottom: "20px",
-                                }}
-                            >
-                                <label>
-                                    <strong>
-                                        Student Name:
-                                    </strong>
-                                </label>
-
-                                <br />
-
-                                <input
-                                    type="text"
-                                    value={studentName}
-                                    onChange={(e) =>
-                                        setStudentName(
-                                            e.target.value
-                                        )
-                                    }
-                                    placeholder="Enter your name"
-                                    style={{
-                                        marginTop: "8px",
-                                        padding: "10px",
-                                        width: "100%",
-                                        maxWidth: "400px",
-                                        boxSizing: "border-box",
-                                    }}
-                                />
-                            </div>
-
-                            {/* File */}
-
-                            <div
-                                style={{
-                                    marginBottom: "20px",
-                                }}
-                            >
-                                <label>
-                                    <strong>
-                                        Select Assignment File:
-                                    </strong>
-                                </label>
-
-                                <br />
-
-                                <input
-                                    type="file"
-                                    onChange={(e) =>
-                                        setSelectedFile(
-                                            e.target.files[0]
-                                        )
-                                    }
-                                    style={{
-                                        marginTop: "8px",
-                                    }}
-                                />
-                            </div>
-
-                            {/* Buttons */}
-
-                            <button
-                                type="submit"
-                                style={{
-                                    padding: "10px 18px",
-                                    border: "none",
-                                    borderRadius: "6px",
-                                    cursor: "pointer",
-                                    backgroundColor: "#16a34a",
-                                    color: "white",
-                                    fontSize: "15px",
-                                }}
-                            >
-                                Upload & Submit
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setSelectedAssignment(null);
-                                    setSelectedFile(null);
-                                    setStudentName("");
-                                    setMessage("");
-                                }}
-                                style={{
-                                    marginLeft: "10px",
-                                    padding: "10px 18px",
-                                    border: "1px solid #999",
-                                    borderRadius: "6px",
-                                    cursor: "pointer",
-                                    backgroundColor: "white",
-                                    fontSize: "15px",
-                                }}
-                            >
-                                Cancel
-                            </button>
-                        </form>
-
-                        {/* Message */}
-
-                        {message && (
-                            <p
-                                style={{
-                                    marginTop: "20px",
-                                    padding: "10px",
-                                    backgroundColor: "#f1f5f9",
-                                    borderRadius: "6px",
-                                }}
-                            >
-                                {message}
-                            </p>
-                        )}
-                    </div>
-                )}
-            </div>
+  return (
+    <div className="app-shell">
+      <header className="site-header">
+        <div className="brand">
+          <div className="brand-mark">CA</div>
+          <div>
+            <div className="brand-title">Cloud Assignment System</div>
+            <div className="brand-subtitle">Student submission portal</div>
+          </div>
         </div>
-    );
+
+        <div className="online-badge">
+          <span className="online-dot" />
+          Online
+        </div>
+      </header>
+
+      <main className="page">
+        <section className="hero">
+          <div className="hero-copy">
+            <span className="eyebrow">ACADEMIC PORTAL</span>
+            <h1>Submit your assignments with confidence.</h1>
+            <p>
+              View your active assignments, check deadlines, and securely
+              upload your project files from one simple portal.
+            </p>
+          </div>
+
+          <div className="hero-stat">
+            <span>Available</span>
+            <strong>{assignments.length}</strong>
+            <small>assignment{assignments.length === 1 ? "" : "s"}</small>
+          </div>
+        </section>
+
+        <section className="section-heading">
+          <div>
+            <span className="section-kicker">ASSIGNMENTS</span>
+            <h2>Current assignments</h2>
+          </div>
+          <p>{loading ? "Loading..." : "Select an assignment to submit."}</p>
+        </section>
+
+        {loading && (
+          <div className="state-card">
+            <div className="spinner" />
+            <strong>Loading assignments</strong>
+            <span>Please wait a moment...</span>
+          </div>
+        )}
+
+        {!loading && assignments.length === 0 && (
+          <div className="state-card">
+            <div className="state-icon">✓</div>
+            <strong>No assignments available</strong>
+            <span>New assignments will appear here when they are added.</span>
+          </div>
+        )}
+
+        {!loading && assignments.length > 0 && (
+          <div className="assignment-grid">
+            {assignments.map((assignment) => (
+              <article className="assignment-card" key={assignment.id}>
+                <div className="assignment-top">
+                  <div className="assignment-icon">📚</div>
+                  <span className="status-pill">Open</span>
+                </div>
+
+                <h3>{assignment.title}</h3>
+                <p className="assignment-description">
+                  {assignment.description || "No description provided."}
+                </p>
+
+                <div className="deadline">
+                  <span>SUBMISSION DEADLINE</span>
+                  <strong>{formatDueDate(assignment.due_date)}</strong>
+                </div>
+
+                <button
+                  className="primary-button"
+                  onClick={() => openSubmission(assignment)}
+                >
+                  Submit Assignment
+                  <span>→</span>
+                </button>
+              </article>
+            ))}
+          </div>
+        )}
+
+        {selectedAssignment && (
+          <section className="submission-panel">
+            <div className="panel-heading">
+              <div>
+                <span className="section-kicker">SUBMISSION</span>
+                <h2>{selectedAssignment.title}</h2>
+                <p>Complete the details below and upload your project file.</p>
+              </div>
+              <button className="close-button" onClick={closeSubmission}>
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={submitAssignment} className="submission-form">
+              <label className="field">
+                <span>Student name</span>
+                <input
+                  type="text"
+                  value={studentName}
+                  onChange={(e) => setStudentName(e.target.value)}
+                  placeholder="Enter your full name"
+                />
+              </label>
+
+              <label className="field">
+                <span>Assignment file</span>
+                <div className="file-box">
+                  <input
+                    id="assignment-file"
+                    type="file"
+                    onChange={(e) =>
+                      setSelectedFile(e.target.files?.[0] || null)
+                    }
+                  />
+                  <label htmlFor="assignment-file" className="file-button">
+                    Choose file
+                  </label>
+                  <span className="file-name">
+                    {selectedFile ? selectedFile.name : "No file selected"}
+                  </span>
+                </div>
+              </label>
+
+              <div className="form-actions">
+                <button
+                  type="submit"
+                  className="submit-button"
+                  disabled={submitting}
+                >
+                  {submitting ? "Uploading..." : "Upload & Submit"}
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={closeSubmission}
+                  disabled={submitting}
+                >
+                  Cancel
+                </button>
+              </div>
+
+              {message && (
+                <div
+                  className={`message ${
+                    message.toLowerCase().includes("success")
+                      ? "success"
+                      : "info"
+                  }`}
+                >
+                  {message}
+                </div>
+              )}
+            </form>
+          </section>
+        )}
+      </main>
+
+      <footer className="site-footer">
+        <span>Cloud Assignment System</span>
+        <span>Student Assignment Submission Portal</span>
+      </footer>
+    </div>
+  );
 }
 
 export default App;
