@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: assignment-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: assignment_user
+      POSTGRES_PASSWORD: assignment_password
+      POSTGRES_DB: assignment_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
